@@ -1,5 +1,10 @@
 <?php namespace Anchu\Ftp;
 
+use Anchu\Ftp\Exceptions\ChangeDirException;
+use Anchu\Ftp\Exceptions\ConnectException;
+use Anchu\Ftp\Exceptions\FtpException;
+use Anchu\Ftp\Exceptions\LoginException;
+
 class Ftp {
 
 	/**
@@ -21,7 +26,8 @@ class Ftp {
      * Create a new ftp connection instance.
      *
      * @param  config
-     * @return void
+     * @throws ConnectException
+     * @throws LoginException
      */
     public function __construct($config)
     {
@@ -34,7 +40,8 @@ class Ftp {
      *
      * @param $config
      * @return resource
-     * @throws \Exception
+     * @throws ConnectException
+     * @throws LoginException
      */
     public function connect($config)
     {
@@ -45,18 +52,31 @@ class Ftp {
         if (!isset($config['secure']))
             $config['secure'] = false;
 
-        if ($config['secure']) {
-            $connectionId = ftp_ssl_connect($config['host'], $config['port'], $config['timeout']);
-        } else {
-            $connectionId = ftp_connect($config['host'], $config['port'], $config['timeout']);
-        }
-        if ($connectionId) {
-            $loginResponse = ftp_login($connectionId, $config['username'], $config['password']);
-            ftp_pasv($connectionId, $config['passive']);
+        try {
+            if ($config['secure']) {
+                $connectionId = ftp_ssl_connect($config['host'], $config['port'], $config['timeout']);
+            } else {
+                $connectionId = ftp_connect($config['host'], $config['port'], $config['timeout']);
+            }
+        } catch (\Exception $e) {
+            throw new ConnectException($e->getMessage());
         }
 
-        if ((!$connectionId) || (!$loginResponse))
-            throw new \Exception('FTP connection has failed!');
+        if (!$connectionId){
+            throw new ConnectException('FTP connection has failed.');
+        } else {
+            try {
+                $loginResponse = ftp_login($connectionId, $config['username'], $config['password']);
+            } catch (\Exception $e){
+                throw new LoginException($e->getMessage());
+            }
+        }
+
+        if (!$loginResponse){
+            throw new LoginException('Logging in has failed.');
+        }
+
+        ftp_pasv($connectionId, $config['passive']);
 
         return $connectionId;
     }
@@ -64,7 +84,6 @@ class Ftp {
     /**
      * Disconnect active connection.
      *
-     * @param  config
      * @return void
      */
     public function disconnect()
@@ -158,6 +177,7 @@ class Ftp {
      *
      * @param $directory
      * @return bool
+     * @throws ChangeDirException
      */
     public function changeDir($directory)
     {
@@ -167,7 +187,7 @@ class Ftp {
             else
                 return false;
         } catch(\Exception $e) {
-            return false;
+            throw new ChangeDirException($e->getMessage());
         }
     }
 
